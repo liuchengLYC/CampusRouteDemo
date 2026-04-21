@@ -2,19 +2,29 @@
 // 1. Route data
 // ================================
 const ROUTES = {
-    nthu_demo: {
-      name: "台大正門 → 電機系館 → 社科院",
+    ntu_demo: {
+      name: "文學院 → 機械新館 → 電機二館 → 森林系系館 → 管院一號館",
       points: [
-        { name: "台大正門", lat: 25.016935262663143, lng: 121.53393017463715 },
-        { name: "電機系館", lat: 25.01862, lng: 121.54229 },
-        { name: "社科院", lat: 25.0195, lng: 121.5440 }
+        { name: "文學院", lat: 25.01787, lng: 121.53676 },
+        { name: "機械新館", lat: 25.01904, lng: 121.53958 },
+        { name: "電機二館", lat: 25.01862, lng: 121.54229 },
+        { name: "森林系系館", lat: 25.01693, lng: 121.53947 },
+        { name: "管院一號館", lat: 25.01389, lng: 121.53785 }
       ]
     },
     route_2: {
+      name: "台大正門 → 電機系館 → 社科圖",
+      points: [
+        { name: "台大正門", lat: 25.016935262663143, lng: 121.53393017463715 },
+        { name: "電機系館", lat: 25.01862, lng: 121.54229 },
+        { name: "社科圖", lat: 25.02049, lng: 121.54244 }
+      ]
+    },
+    route_3: {
       name: "總圖 → 博理館",
       points: [
-        { name: "總圖", lat: 25.0178, lng: 121.5408 },
-        { name: "博理館", lat: 25.0187, lng: 121.5430 }
+        { name: "總圖", lat: 25.0178, lng: 121.54106 },
+        { name: "博理館", lat: 25.01936, lng: 121.54231 }
       ]
     }
   };
@@ -28,6 +38,8 @@ const ROUTES = {
   let previewLine = null;
   let routeLine = null;
   let currentRouteKey = null;
+  let currentStepMarker = null;
+  let nextStepMarker = null;
   let navigationSteps = [];
   let currentStepIndex = 0;
   
@@ -106,6 +118,16 @@ const ROUTES = {
     currentStepCard.textContent = "目前沒有導航步驟";
     prevStepBtn.disabled = true;
     nextStepBtn.disabled = true;
+  
+    if (currentStepMarker) {
+      map.removeLayer(currentStepMarker);
+      currentStepMarker = null;
+    }
+  
+    if (nextStepMarker) {
+      map.removeLayer(nextStepMarker);
+      nextStepMarker = null;
+    }
   }
   
   // ================================
@@ -115,7 +137,7 @@ const ROUTES = {
     const route = ROUTES[currentRouteKey];
     if (!route) return;
   
-    // 先清掉上一條已顯示的路線與中繼點
+    // CLear last showed route
     clearMarkers();
     clearPreviewLine();
     clearRouteLine();
@@ -123,7 +145,7 @@ const ROUTES = {
   
     const latlngs = route.points.map((point) => [point.lat, point.lng]);
   
-    // 把這次新載入路線的所有中繼點標出來
+    // Label all individual points with markers
     route.points.forEach((point, index) => {
       const marker = L.marker([point.lat, point.lng])
         .addTo(map)
@@ -131,7 +153,7 @@ const ROUTES = {
       markers.push(marker);
     });
   
-    // 用虛線先預覽各節點連線
+    // Draw preview line (dashed)
     previewLine = L.polyline(latlngs, {
       dashArray: "5, 5",
       color: "blue"
@@ -251,6 +273,7 @@ const ROUTES = {
       console.error(error);
       routeInfo.textContent = "載入路線失敗，請稍後再試";
     }
+    updateStepMarkers();
   }
   
   // ================================
@@ -261,13 +284,41 @@ const ROUTES = {
   
     legs.forEach((leg, legIndex) => {
       leg.steps.forEach((step, stepIndex) => {
+        const startLocation = step.maneuver?.location
+          ? [step.maneuver.location[1], step.maneuver.location[0]]
+          : null;
+  
+        let endLocation = null;
+  
+        // Use next step's maneuver location as end location, if available
+        if (stepIndex < leg.steps.length - 1) {
+          const nextStep = leg.steps[stepIndex + 1];
+          if (nextStep.maneuver?.location) {
+            endLocation = [
+              nextStep.maneuver.location[1],
+              nextStep.maneuver.location[0]
+            ];
+          }
+        } else {
+          // For the last step, use the last coordinate of the step geometry as end location
+          if (leg.steps[stepIndex].geometry) {
+            const decodedStep = decodePolyline(step.geometry);
+            if (decodedStep.length > 0) {
+              endLocation = decodedStep[decodedStep.length - 1];
+            }
+          }
+        }
+  
         result.push({
           legIndex: legIndex + 1,
           stepIndex: stepIndex + 1,
-          maneuver: step.maneuver?.type || "前進",
+          maneuver: step.maneuver?.type || "continue",
+          modifier: step.maneuver?.modifier || "",
           roadName: step.name || "未命名道路",
           distance: Math.round(step.distance),
-          instruction: formatInstruction(step, legIndex + 1, stepIndex + 1)
+          instruction: formatInstruction(step, legIndex + 1, stepIndex + 1),
+          startLocation,
+          endLocation
         });
       });
     });
@@ -276,10 +327,65 @@ const ROUTES = {
   }
   
   function formatInstruction(step, legNumber, stepNumber) {
-    const maneuver = step.maneuver?.type || "前進";
-    const roadName = step.name ? `（${step.name}）` : "";
-    const distance = `${Math.round(step.distance)} 公尺`;
-    return `第 ${legNumber} 段 - 第 ${stepNumber} 步：${maneuver} ${roadName}，前進 ${distance}`;
+    const type = step.maneuver?.type || "continue";
+    const modifier = step.maneuver?.modifier || "";
+    const rawRoadName = (step.name || "").trim();
+    const distance = Math.round(step.distance);
+  
+    const roadNameText = rawRoadName ? `「${rawRoadName}」` : "";
+    const distanceText = distance > 0 ? `，前進 ${distance} 公尺` : "";
+  
+    let actionText = "";
+  
+    switch (type) {
+      case "depart":
+        actionText = rawRoadName
+          ? `從${roadNameText}出發`
+          : "從目前位置出發";
+        break;
+  
+      case "turn": {
+        let turnText = "轉彎";
+        if (modifier === "left") turnText = "左轉";
+        else if (modifier === "right") turnText = "右轉";
+        else if (modifier === "slight left") turnText = "稍微左轉";
+        else if (modifier === "slight right") turnText = "稍微右轉";
+        else if (modifier === "sharp left") turnText = "大幅左轉";
+        else if (modifier === "sharp right") turnText = "大幅右轉";
+        else if (modifier === "straight") turnText = "直行";
+  
+        actionText = rawRoadName
+          ? `${turnText}進入${roadNameText}`
+          : turnText;
+        break;
+      }
+  
+      case "new name":
+        actionText = rawRoadName
+          ? `繼續直行，接著進入${roadNameText}`
+          : "繼續直行";
+        break;
+  
+      case "continue":
+        actionText = rawRoadName
+          ? `沿著${roadNameText}直行`
+          : "繼續直行";
+        break;
+  
+      case "arrive":
+        actionText = rawRoadName
+          ? `抵達${roadNameText}`
+          : "已抵達目的地";
+        return `第 ${legNumber} 段 第 ${stepNumber} 步：${actionText}`;
+  
+      default:
+        actionText = rawRoadName
+          ? `沿著${roadNameText}前進`
+          : "繼續前進";
+        break;
+    }
+  
+    return `第 ${legNumber} 段 第 ${stepNumber} 步：${actionText}${distanceText}`;
   }
   
   // ================================
@@ -315,6 +421,47 @@ const ROUTES = {
       ${step.instruction}
     `;
   }
+
+  function updateStepMarkers() {
+    if (navigationSteps.length === 0) return;
+  
+    if (currentStepMarker) {
+      map.removeLayer(currentStepMarker);
+      currentStepMarker = null;
+    }
+  
+    if (nextStepMarker) {
+      map.removeLayer(nextStepMarker);
+      nextStepMarker = null;
+    }
+  
+    const step = navigationSteps[currentStepIndex];
+    if (!step) return;
+  
+    const { startLocation, endLocation } = step;
+  
+    if (startLocation) {
+      currentStepMarker = L.circleMarker(startLocation, {
+        radius: 10,
+        color: "blue",
+        fillColor: "blue",
+        fillOpacity: 0.8
+      })
+        .addTo(map)
+        .bindPopup(`目前位置：第 ${step.legIndex} 段 第 ${step.stepIndex} 步`);
+    }
+  
+    if (endLocation) {
+      nextStepMarker = L.circleMarker(endLocation, {
+        radius: 10,
+        color: "red",
+        fillColor: "red",
+        fillOpacity: 0.8
+      })
+        .addTo(map)
+        .bindPopup(`這一步終點：第 ${step.legIndex} 段 第 ${step.stepIndex} 步`);
+    }
+  }
   
   // ================================
   // 12. Last/Next step
@@ -327,6 +474,7 @@ const ROUTES = {
     renderSteps();
     updateCurrentStepCard();
     updateStepButtons();
+    updateStepMarkers(); 
   }
   
   function goNextStep() {
@@ -337,6 +485,7 @@ const ROUTES = {
     renderSteps();
     updateCurrentStepCard();
     updateStepButtons();
+    updateStepMarkers(); 
   }
   
   function updateStepButtons() {
