@@ -3,233 +3,50 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>校園路線示範</title>
+  <title>校園導覽地圖</title>
 
-  <!-- Leaflet -->
   <link
     rel="stylesheet"
     href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
   />
-  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-
-  <style>
-    body {
-      margin: 0;
-      font-family: Arial, "Noto Sans TC", sans-serif;
-      display: grid;
-      grid-template-columns: 2fr 1fr;
-      height: 100vh;
-    }
-
-    #map {
-      height: 100vh;
-      width: 100%;
-    }
-
-    .panel {
-      padding: 16px;
-      overflow-y: auto;
-      border-left: 1px solid #ddd;
-      background: #fafafa;
-    }
-
-    h1 {
-      font-size: 20px;
-      margin-top: 0;
-    }
-
-    button {
-      padding: 10px 14px;
-      border: none;
-      background: #222;
-      color: white;
-      border-radius: 8px;
-      cursor: pointer;
-      margin-bottom: 12px;
-    }
-
-    .info {
-      margin: 12px 0;
-      padding: 12px;
-      background: white;
-      border-radius: 10px;
-      border: 1px solid #ddd;
-    }
-
-    ol {
-      padding-left: 20px;
-    }
-
-    li {
-      margin-bottom: 8px;
-      line-height: 1.5;
-    }
-
-    @media (max-width: 768px) {
-      body {
-        grid-template-columns: 1fr;
-        grid-template-rows: 50vh 50vh;
-      }
-
-      #map {
-        height: 50vh;
-      }
-    }
-  </style>
+  <link rel="stylesheet" href="./style.css" />
 </head>
 <body>
   <div id="map"></div>
 
-  <div class="panel">
-    <h1>台大校園路線示範</h1>
-    <p>固定路線：台大正門 → 電機系館 → 社科院</p>
-    <button id="routeBtn">顯示路線</button>
+  <aside class="panel">
+    <h1>校園路線導覽</h1>
 
-    <div class="info" id="summary">尚未載入路線</div>
-    <div class="info">
-      <strong>導航步驟</strong>
-      <ol id="steps"></ol>
+    <div class="control-group">
+      <label for="routeSelect">選擇路線</label>
+      <select id="routeSelect"></select>
     </div>
-  </div>
 
-  <script>
-    // 1) 建立地圖
-    const map = L.map("map").setView([25.0173, 121.5397], 16);
+    <div class="button-group">
+      <button id="loadRouteBtn">載入路線</button>
+      <button id="showRouteBtn">顯示路線</button>
+    </div>
 
-    // 2) 加上 OpenStreetMap 底圖
-    L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
-      attribution: '&copy; OpenStreetMap contributors'
-    }).addTo(map);
+    <div class="button-group">
+      <button id="prevStepBtn" disabled>上一步</button>
+      <button id="nextStepBtn" disabled>下一步</button>
+    </div>
 
-    // 3) 寫死幾個校內地點（這裡座標可再微調）
-    const places = {
-      gate: {
-        name: "台大正門",
-        lat: 25.0173,
-        lng: 121.5397
-      },
-      ee: {
-        name: "電機系館",
-        lat: 25.0170,
-        lng: 121.5423
-      },
-      soc: {
-        name: "社科院",
-        lat: 25.0195,
-        lng: 121.5440
-      }
-    };
+    <div class="info-card" id="routeInfo">
+      尚未載入路線
+    </div>
 
-    // 地圖標記
-    Object.values(places).forEach((p) => {
-      L.marker([p.lat, p.lng]).addTo(map).bindPopup(p.name);
-    });
+    <div class="info-card" id="currentStepCard">
+      目前沒有導航步驟
+    </div>
 
-    let routeLine = null;
+    <div class="info-card">
+      <h2>全部導航步驟</h2>
+      <ol id="stepsList"></ol>
+    </div>
+  </aside>
 
-    // 將 OSRM 回傳的 polyline 解碼成 [lat, lng]
-    function decodePolyline(str, precision = 5) {
-      let index = 0;
-      let lat = 0;
-      let lng = 0;
-      const coordinates = [];
-      const factor = Math.pow(10, precision);
-
-      while (index < str.length) {
-        let result = 0;
-        let shift = 0;
-        let byte = null;
-
-        do {
-          byte = str.charCodeAt(index++) - 63;
-          result |= (byte & 0x1f) << shift;
-          shift += 5;
-        } while (byte >= 0x20);
-
-        const deltaLat = (result & 1) ? ~(result >> 1) : (result >> 1);
-        lat += deltaLat;
-
-        result = 0;
-        shift = 0;
-
-        do {
-          byte = str.charCodeAt(index++) - 63;
-          result |= (byte & 0x1f) << shift;
-          shift += 5;
-        } while (byte >= 0x20);
-
-        const deltaLng = (result & 1) ? ~(result >> 1) : (result >> 1);
-        lng += deltaLng;
-
-        coordinates.push([lat / factor, lng / factor]);
-      }
-
-      return coordinates;
-    }
-
-    async function drawRoute() {
-      const coords = [
-        `${places.gate.lng},${places.gate.lat}`,
-        `${places.ee.lng},${places.ee.lat}`,
-        `${places.soc.lng},${places.soc.lat}`
-      ].join(";");
-
-      // OSRM walking route
-      const url = `https://router.project-osrm.org/route/v1/foot/${coords}?overview=full&geometries=polyline&steps=true`;
-
-      try {
-        const res = await fetch(url);
-        const data = await res.json();
-
-        if (!data.routes || data.routes.length === 0) {
-          document.getElementById("summary").textContent = "查無路線";
-          return;
-        }
-
-        const route = data.routes[0];
-
-        // 移除舊路線
-        if (routeLine) {
-          map.removeLayer(routeLine);
-        }
-
-        // 畫線
-        const latlngs = decodePolyline(route.geometry);
-        routeLine = L.polyline(latlngs).addTo(map);
-        map.fitBounds(routeLine.getBounds(), { padding: [30, 30] });
-
-        // 距離與時間
-        const km = (route.distance / 1000).toFixed(2);
-        const mins = Math.round(route.duration / 60);
-        document.getElementById("summary").innerHTML =
-          `<strong>總距離：</strong>${km} 公里<br>` +
-          `<strong>預估時間：</strong>${mins} 分鐘`;
-
-        // 步驟
-        const stepsEl = document.getElementById("steps");
-        stepsEl.innerHTML = "";
-
-        route.legs.forEach((leg, legIndex) => {
-          const title = document.createElement("li");
-          title.innerHTML = `<strong>第 ${legIndex + 1} 段：${leg.summary || "步行路段"}</strong>`;
-          stepsEl.appendChild(title);
-
-          leg.steps.forEach((step) => {
-            const li = document.createElement("li");
-            const roadName = step.name ? `（${step.name}）` : "";
-            const dist = `${Math.round(step.distance)} 公尺`;
-            const maneuver = step.maneuver?.type || "前進";
-            li.textContent = `${maneuver} ${roadName} - ${dist}`;
-            stepsEl.appendChild(li);
-          });
-        });
-      } catch (err) {
-        document.getElementById("summary").textContent = "載入失敗，請稍後再試";
-        console.error(err);
-      }
-    }
-
-    document.getElementById("routeBtn").addEventListener("click", drawRoute);
-  </script>
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script src="./app.js"></script>
 </body>
 </html>
