@@ -5,8 +5,8 @@ const ROUTES = {
     nthu_demo: {
       name: "台大正門 → 電機系館 → 社科院",
       points: [
-        { name: "台大正門", lat: 25.0173, lng: 121.5397 },
-        { name: "電機系館", lat: 25.0170, lng: 121.5423 },
+        { name: "台大正門", lat: 25.016935262663143, lng: 121.53393017463715 },
+        { name: "電機系館", lat: 25.01862, lng: 121.54229 },
         { name: "社科院", lat: 25.0195, lng: 121.5440 }
       ]
     },
@@ -23,6 +23,7 @@ const ROUTES = {
   // 2. Global states
   // ================================
   let map;
+  let baseLayer; // 用於清除地圖時保留基礎圖層
   let markers = [];
   let previewLine = null;
   let routeLine = null;
@@ -46,9 +47,11 @@ const ROUTES = {
   function initMap() {
     map = L.map("map").setView([25.0173, 121.5397], 16);
   
-    L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+    baseLayer = L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
       attribution: "&copy; OpenStreetMap contributors"
-    }).addTo(map);
+    });
+  
+    baseLayer.addTo(map);
   }
   
   // ================================
@@ -112,6 +115,7 @@ const ROUTES = {
     const route = ROUTES[currentRouteKey];
     if (!route) return;
   
+    // 先清掉上一條已顯示的路線與中繼點
     clearMarkers();
     clearPreviewLine();
     clearRouteLine();
@@ -119,6 +123,7 @@ const ROUTES = {
   
     const latlngs = route.points.map((point) => [point.lat, point.lng]);
   
+    // 把這次新載入路線的所有中繼點標出來
     route.points.forEach((point, index) => {
       const marker = L.marker([point.lat, point.lng])
         .addTo(map)
@@ -126,8 +131,10 @@ const ROUTES = {
       markers.push(marker);
     });
   
+    // 用虛線先預覽各節點連線
     previewLine = L.polyline(latlngs, {
-      dashArray: "6, 6"
+      dashArray: "5, 5",
+      color: "blue"
     }).addTo(map);
   
     map.fitBounds(previewLine.getBounds(), { padding: [30, 30] });
