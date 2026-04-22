@@ -493,9 +493,57 @@ const ROUTES = {
     prevStepBtn.disabled = !hasSteps || currentStepIndex === 0;
     nextStepBtn.disabled = !hasSteps || currentStepIndex === navigationSteps.length - 1;
   }
+
+// ================================
+// 1３. User location tracking
+// ================================
+
+let userMarker = null;
+
+// Track user location in real-time
+function trackUserLocation() {
+  if (!navigator.geolocation) {
+    alert("Geolocation is not supported by your browser");
+    return;
+  }
+
+  navigator.geolocation.watchPosition(
+    (position) => {
+      const lat = position.coords.latitude;
+      const lng = position.coords.longitude;
+
+      // If marker already exists, just update position
+      if (userMarker) {
+        userMarker.setLatLng([lat, lng]);
+      } else {
+        // Create marker first time
+        userMarker = L.circleMarker([lat, lng], {
+          radius: 8,
+          color: "green",
+          fillColor: "green",
+          fillOpacity: 0.9
+        })
+          .addTo(map)
+          .bindPopup("你目前的位置");
+      }
+    },
+    (error) => {
+      console.warn("Geolocation failed:", error);
+      currentStepCard.innerHTML = `
+        <strong>定位未啟用：</strong><br>
+        你仍然可以使用手動瀏覽導航步驟。
+      `;
+    },
+    {
+      enableHighAccuracy: true, // Try to use GPS
+      maximumAge: 1000,
+      timeout: 5000
+    }
+  );
+}
   
   // ================================
-  // 13. Binding events
+  // 14. Binding events
   // ================================
   loadRouteBtn.addEventListener("click", loadRoute);
   showRouteBtn.addEventListener("click", showRoute);
@@ -503,8 +551,9 @@ const ROUTES = {
   nextStepBtn.addEventListener("click", goNextStep);
   
   // ================================
-  // 14. Activate
+  // 15. Activate
   // ================================
   initMap();
   initRouteSelect();
   loadRoute();
+  trackUserLocation();
