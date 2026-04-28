@@ -12,41 +12,62 @@
   <link rel="stylesheet" href="./style.css" />
 </head>
 <body>
-  <div id="map"></div>
+  <main class="map-area">
+    <div class="map-view active" id="routeMap"></div>
+    <div class="map-view" id="campusMap"></div>
+  </main>
 
   <aside class="panel">
-    <h1>校園路線導覽</h1>
-
-    <div class="control-group">
-      <label for="routeSelect">選擇路線</label>
-      <select id="routeSelect"></select>
+    <div class="tab-group">
+      <button class="tab-button active" id="routeTabBtn">路線導覽</button>
+      <button class="tab-button" id="campusTabBtn">休憩點與危險點</button>
     </div>
 
-    <div class="button-group">
-      <button id="loadRouteBtn">載入路線</button>
-      <button id="showRouteBtn">顯示路線</button>
-    </div>
+    <!-- route page -->
+    <section class="panel-page active" id="routePanel">
+      <h1>校園路線導覽</h1>
 
-    <div class="button-group">
-      <button id="prevStepBtn" disabled>上一步</button>
-      <button id="nextStepBtn" disabled>下一步</button>
-    </div>
+      <div class="control-group">
+        <label for="routeSelect">選擇路線</label>
+        <select id="routeSelect"></select>
+      </div>
 
-    <div class="info-card" id="routeInfo">
-      尚未載入路線
-    </div>
+      <div class="button-group">
+        <button id="loadRouteBtn">載入路線</button>
+        <button id="showRouteBtn">顯示路線</button>
+      </div>
 
-    <div class="info-card" id="currentStepCard">
-      目前沒有導航步驟
-    </div>
+      <div class="button-group">
+        <button id="prevStepBtn" disabled>上一步</button>
+        <button id="nextStepBtn" disabled>下一步</button>
+      </div>
 
-    <div class="info-card">
-      <h2>全部導航步驟</h2>
-      <ol id="stepsList"></ol>
-    </div>
+      <div class="info-card" id="routeInfo">
+        尚未載入路線
+      </div>
+
+      <div class="info-card" id="currentStepCard">
+        目前沒有導航步驟
+      </div>
+
+      <div class="info-card">
+        <h2>全部導航步驟</h2>
+        <ol id="stepsList"></ol>
+      </div>
+    </section>
+
+    <!-- school map page -->
+    <section class="panel-page" id="campusPanel">
+      <h1>休憩點與危險點</h1>
+
+      <div class="info-card">
+        <h2>地圖圖例</h2>
+        <ul id="campusLegend" class="legend-list"></ul>
+      </div>
+    </section>
   </aside>
 
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-  <script src="./app.js"></script>
+  <script type="module" src="./src/app.js"></script>
 </body>
 </html>
