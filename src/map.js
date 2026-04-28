@@ -11,6 +11,7 @@ let previewLine = null;
 let routeLine = null;
 let currentStepMarker = null;
 let nextStepMarker = null;
+let isRouteLoaded = false;
 
 export function initMaps() {
   if (!window.L) {
@@ -32,6 +33,7 @@ export function initMaps() {
 export function clearMarkers() {
   markers.forEach((marker) => routeMap.removeLayer(marker));
   markers = [];
+  isRouteLoaded = false;
 }
 
 export function clearPreviewLine() {
@@ -74,6 +76,8 @@ export function drawRoutePreview(points) {
     color: "blue"
   }).addTo(routeMap);
 
+  isRouteLoaded = true;
+
   routeMap.fitBounds(previewLine.getBounds(), { padding: [30, 30] });
   routeMap.invalidateSize();
 }
@@ -111,6 +115,10 @@ export function updateStepMarkers(step) {
       .addTo(routeMap)
       .bindPopup(`這一步終點：第 ${step.legIndex} 段 第 ${step.stepIndex} 步`);
   }
+}
+
+export function hasLoadedRoute() {
+  return isRouteLoaded;
 }
 
 export function initCampusPoints(campusPoints, campusLegend) {

@@ -31,7 +31,6 @@ function startApp() {
     initTabs(maps);
 
     switchTab("route", maps);
-    loadRoute();
     trackUserLocation(maps.routeMap);
 
     dom.loadRouteBtn.addEventListener("click", loadRoute);

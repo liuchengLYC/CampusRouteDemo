@@ -10,7 +10,8 @@ import {
   clearPreviewLine,
   clearRouteLine,
   drawActualRoute,
-  drawRoutePreview
+  drawRoutePreview,
+  hasLoadedRoute
 } from "./map.js";
 import {
   decodePolyline,
@@ -40,12 +41,22 @@ export function initRouteSelect() {
     dom.routeSelect.value = currentRouteKey;
   }
 
+  dom.showRouteBtn.disabled = true;
+  dom.routeInfo.textContent = "請先選擇路線並按「載入路線」。";
+
   dom.routeSelect.addEventListener("change", () => {
     currentRouteKey = dom.routeSelect.value;
+    clearMarkers();
+    clearPreviewLine();
+    clearRouteLine();
+    resetNavigation();
+    dom.showRouteBtn.disabled = true;
+    dom.routeInfo.textContent = "路線已變更，請先按「載入路線」。";
   });
 }
 
 export function loadRoute() {
+  const dom = getDom();
   const route = ROUTES[currentRouteKey];
   if (!route) return;
 
@@ -56,10 +67,17 @@ export function loadRoute() {
 
   drawRoutePreview(route.points);
   renderLoadedRouteInfo(route);
+  dom.showRouteBtn.disabled = false;
 }
 
 export async function showRoute() {
   const dom = getDom();
+
+  if (!hasLoadedRoute()) {
+    dom.routeInfo.textContent = "請先按「載入路線」，再按「顯示路線」。";
+    return;
+  }
+
   const route = ROUTES[currentRouteKey];
 
   if (!route || route.points.length < 2) {
