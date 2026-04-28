@@ -70,15 +70,39 @@ export function loadRoute() {
   const routingPoints = getRoutingPointsWithOptionalAccess(route);
 
   drawRoutePreview(routingPoints);
-  renderLoadedRouteInfo(route);
+  clearRouteLine();
 
-  if (routingPoints.hasAccessSegment) {
+  if (route.useManualPath) {
+    renderLoadedManualRouteInfo(route, routingPoints);
+  } else {
+    renderLoadedRouteInfo(route);
+  }
+
+  if (!route.useManualPath && routingPoints.hasAccessSegment) {
     dom.routeInfo.innerHTML += `
       <div><strong>起點導航：</strong>你目前離路線起點超過 ${ROUTE_START_ACCESS_DISTANCE} 公尺，已加入前往路線起點的導引線段。</div>
     `;
   }
 
   dom.showRouteBtn.disabled = false;
+}
+
+function renderLoadedManualRouteInfo(route, routingPoints) {
+  const dom = getDom();
+  const hasAccessSegment = routingPoints.hasAccessSegment;
+  const routePoints = hasAccessSegment ? routingPoints.slice(1) : routingPoints;
+
+  dom.routeInfo.innerHTML = `
+    <strong>已載入路線：</strong>${route.name}
+    <br>
+    <strong>模式：</strong>手動路線，不使用 OSRM 自動導航
+    <br>
+    <strong>路線節點：</strong>
+    <ol class="route-point-list">
+      ${routePoints.map((point) => `<li>${point.name}</li>`).join("")}
+    </ol>
+    <div>現在可以按「顯示路線」產生手動導航步驟。</div>
+  `;
 }
 
 export async function showRoute() {
@@ -99,6 +123,11 @@ export async function showRoute() {
   clearRouteLine();
   resetNavigation();
 
+  if (route.useManualPath) {
+    showManualRoute(route);
+    return;
+  }
+
   try {
     dom.routeInfo.innerHTML = "正在向 API 載入路線";
 
@@ -116,6 +145,139 @@ export async function showRoute() {
     console.error(error);
     dom.routeInfo.textContent = `載入路線失敗：${error.message}`;
   }
+}
+
+function showManualRoute(route) {
+  const routingPoints = getRoutingPointsWithOptionalAccess(route);
+  const routeLatLngs = route.points.map((point) => [point.lat, point.lng]);
+  const fullLatLngs = routingPoints.map((point) => [point.lat, point.lng]);
+
+  clearPreviewLine();
+  drawActualRoute(routeLatLngs);
+
+  if (routingPoints.hasAccessSegment) {
+    drawRoutePreview(routingPoints.slice(0, 2));
+  }
+
+  const manualRouteData = buildManualRouteData(routingPoints);
+  const navigationSteps = setNavigationSteps(manualRouteData.legs);
+
+  updateNavigationView();
+  renderManualRouteSummary(route, routingPoints, navigationSteps.length);
+
+  if (routingPoints.hasAccessSegment) {
+    const dom = getDom();
+    dom.routeInfo.innerHTML += `
+      <div><strong>起點導航：</strong>你目前離路線起點超過 ${ROUTE_START_ACCESS_DISTANCE} 公尺，已用預覽線段標示目前位置到路線起點。</div>
+    `;
+  }
+}
+
+function buildManualRouteData(points) {
+  const steps = points.slice(0, -1).map((point, index) => {
+    const nextPoint = points[index + 1];
+    const distance = getDistanceMeters(
+      [point.lat, point.lng],
+      [nextPoint.lat, nextPoint.lng]
+    );
+
+    return {
+      name: nextPoint.name,
+      distance,
+      duration: distance / 1.2,
+      maneuver: {
+        type: index === 0 ? "depart" : "continue",
+        modifier: "straight",
+        location: [point.lng, point.lat]
+      },
+      geometry: encodeSimplePolyline([
+        [point.lat, point.lng],
+        [nextPoint.lat, nextPoint.lng]
+      ])
+    };
+  });
+
+  const lastPoint = points[points.length - 1];
+
+  steps.push({
+    name: lastPoint.name,
+    distance: 0,
+    duration: 0,
+    maneuver: {
+      type: "arrive",
+      modifier: "straight",
+      location: [lastPoint.lng, lastPoint.lat]
+    },
+    geometry: encodeSimplePolyline([
+      [lastPoint.lat, lastPoint.lng],
+      [lastPoint.lat, lastPoint.lng]
+    ])
+  });
+
+  const totalDistance = steps.reduce((sum, step) => sum + step.distance, 0);
+  const totalDuration = steps.reduce((sum, step) => sum + step.duration, 0);
+
+  return {
+    distance: totalDistance,
+    duration: totalDuration,
+    legs: [
+      {
+        distance: totalDistance,
+        duration: totalDuration,
+        steps
+      }
+    ]
+  };
+}
+
+function renderManualRouteSummary(route, points, stepCount) {
+  const dom = getDom();
+  const totalMeters = points.slice(0, -1).reduce((sum, point, index) => {
+    return sum + getDistanceMeters(
+      [point.lat, point.lng],
+      [points[index + 1].lat, points[index + 1].lng]
+    );
+  }, 0);
+
+  dom.routeInfo.innerHTML = `
+    <strong>路線名稱：</strong>${route.name}<br>
+    <strong>模式：</strong>手動路線，不使用 OSRM 自動導航<br>
+    <strong>總距離：</strong>${(totalMeters / 1000).toFixed(2)} 公里<br>
+    <strong>總步驟數：</strong>${stepCount} 步
+  `;
+}
+
+function encodeSimplePolyline(latlngs, precision = 5) {
+  let previousLat = 0;
+  let previousLng = 0;
+  let result = "";
+  const factor = Math.pow(10, precision);
+
+  latlngs.forEach(([lat, lng]) => {
+    const currentLat = Math.round(lat * factor);
+    const currentLng = Math.round(lng * factor);
+
+    result += encodePolylineValue(currentLat - previousLat);
+    result += encodePolylineValue(currentLng - previousLng);
+
+    previousLat = currentLat;
+    previousLng = currentLng;
+  });
+
+  return result;
+}
+
+function encodePolylineValue(value) {
+  let encodedValue = value < 0 ? ~(value << 1) : value << 1;
+  let result = "";
+
+  while (encodedValue >= 0x20) {
+    result += String.fromCharCode((0x20 | (encodedValue & 0x1f)) + 63);
+    encodedValue >>= 5;
+  }
+
+  result += String.fromCharCode(encodedValue + 63);
+  return result;
 }
 
 function getRoutingPointsWithOptionalAccess(route) {

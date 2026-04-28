@@ -33,6 +33,7 @@ export function initMaps() {
 export function clearMarkers() {
   markers.forEach((marker) => routeMap.removeLayer(marker));
   markers = [];
+  clearStepMarkers();
   isRouteLoaded = false;
 }
 
@@ -61,6 +62,9 @@ export function clearStepMarkers() {
 }
 
 export function drawRoutePreview(points) {
+  clearPreviewLine();
+  clearMarkers();
+
   const latlngs = points.map((point) => [point.lat, point.lng]);
 
   points.forEach((point, index) => {
@@ -83,6 +87,8 @@ export function drawRoutePreview(points) {
 }
 
 export function drawActualRoute(decodedPolyline) {
+  clearRouteLine();
+
   routeLine = L.polyline(decodedPolyline).addTo(routeMap);
   routeMap.fitBounds(routeLine.getBounds(), { padding: [30, 30] });
   routeMap.invalidateSize();
@@ -95,6 +101,8 @@ export function updateStepMarkers(step) {
   const { startLocation, endLocation } = step;
 
   if (startLocation) {
+    routeMap.panTo(startLocation);
+
     currentStepMarker = L.circleMarker(startLocation, {
       radius: 10,
       color: "blue",
