@@ -28,11 +28,19 @@ const ROUTES = {
       ]
     }
   };
+
+  const CAMPUS_POINTS = [
+    { name: "台大正門", lat: 25.01693, lng: 121.53393 },
+    { name: "總圖書館", lat: 25.0178, lng: 121.54106 },
+    { name: "椰林大道", lat: 25.01734, lng: 121.53755 },
+    { name: "電機二館", lat: 25.01862, lng: 121.54229 },
+  ];
   
   // ================================
   // 2. Global states
   // ================================
-  let map;
+  let routeMap;
+  let campusMap;
   let baseLayer; // 用於清除地圖時保留基礎圖層
   let markers = [];
   let previewLine = null;
@@ -56,14 +64,14 @@ const ROUTES = {
   // ================================
   // 3. Initialize map
   // ================================
-  function initMap() {
-    map = L.map("map").setView([25.0173, 121.5397], 16);
+  function initMaps() {
+    routeMap = L.map("routeMap").setView([25.0173, 121.5397], 16);
+    campusMap = L.map("campusMap").setView([25.0173, 121.5397], 16);
   
-    baseLayer = L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
-      attribution: "&copy; OpenStreetMap contributors"
-    });
+    const tile = "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png";
   
-    baseLayer.addTo(map);
+    L.tileLayer(tile).addTo(routeMap);
+    L.tileLayer(tile).addTo(campusMap);
   }
   
   // ================================
@@ -493,9 +501,59 @@ const ROUTES = {
     prevStepBtn.disabled = !hasSteps || currentStepIndex === 0;
     nextStepBtn.disabled = !hasSteps || currentStepIndex === navigationSteps.length - 1;
   }
-  
   // ================================
-  // 13. Binding events
+  // 13. Exibit school points on campus map
+  // ================================
+  function initCampusPoints() {
+    CAMPUS_POINTS.forEach(p => {
+      L.circleMarker([p.lat, p.lng], {
+        radius: 8,
+        color: "blue",
+        fillColor: "blue",
+        fillOpacity: 0.8
+      }).addTo(campusMap).bindPopup(p.name);
+  
+      const li = document.createElement("li");
+      li.innerHTML = `<span class="legend-dot"></span>${p.name}`;
+      document.getElementById("campusLegend").appendChild(li);
+    });
+  }
+
+  // ================================
+  // 14. Tab switching logic
+  // ===============================
+  const routeTabBtn = document.getElementById("routeTabBtn");
+  const campusTabBtn = document.getElementById("campusTabBtn");
+
+  const routePanel = document.getElementById("routePanel");
+  const campusPanel = document.getElementById("campusPanel");
+
+  const routeMapEl = document.getElementById("routeMap");
+  const campusMapEl = document.getElementById("campusMap");
+
+  function switchTab(type) {
+    const isRoute = type === "route";
+
+    routePanel.classList.toggle("active", isRoute);
+    campusPanel.classList.toggle("active", !isRoute);
+
+    routeMapEl.classList.toggle("active", isRoute);
+    campusMapEl.classList.toggle("active", !isRoute);
+
+    routeTabBtn.classList.toggle("active", isRoute);
+    campusTabBtn.classList.toggle("active", !isRoute);
+
+    setTimeout(() => {
+      if (isRoute) routeMap.invalidateSize();
+      else campusMap.invalidateSize();
+    }, 0);
+  }
+
+  routeTabBtn.onclick = () => switchTab("route");
+  campusTabBtn.onclick = () => switchTab("campus");
+
+  // ================================
+  // 15. Binding events
   // ================================
   loadRouteBtn.addEventListener("click", loadRoute);
   showRouteBtn.addEventListener("click", showRoute);
@@ -503,8 +561,10 @@ const ROUTES = {
   nextStepBtn.addEventListener("click", goNextStep);
   
   // ================================
-  // 14. Activate
+  // 16. Activate
   // ================================
-  initMap();
+  initMaps();
+  initCampusPoints();
   initRouteSelect();
   loadRoute();
+  switchTab("route");
