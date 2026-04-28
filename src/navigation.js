@@ -56,6 +56,15 @@ export function goNextStep() {
   updateNavigationView();
 }
 
+export function getCurrentStep() {
+  if (navigationSteps.length === 0) return null;
+  return navigationSteps[currentStepIndex] || null;
+}
+
+export function canGoNextStep() {
+  return navigationSteps.length > 0 && currentStepIndex < navigationSteps.length - 1;
+}
+
 export function decodePolyline(str, precision = 5) {
   let index = 0;
   let lat = 0;

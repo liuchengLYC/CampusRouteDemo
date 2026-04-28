@@ -20,8 +20,10 @@ import {
   updateNavigationView
 } from "./navigation.js";
 import { getDom, renderLoadedRouteInfo, renderRouteSummary } from "./ui.js";
+import { getCurrentUserLatLng } from "./location.js";
 
 let currentRouteKey = null;
+const ROUTE_START_ACCESS_DISTANCE = 50;
 
 export function initRouteSelect() {
   const dom = getDom();
@@ -65,8 +67,17 @@ export function loadRoute() {
   clearRouteLine();
   resetNavigation();
 
-  drawRoutePreview(route.points);
+  const routingPoints = getRoutingPointsWithOptionalAccess(route);
+
+  drawRoutePreview(routingPoints);
   renderLoadedRouteInfo(route);
+
+  if (routingPoints.hasAccessSegment) {
+    dom.routeInfo.innerHTML += `
+      <div><strong>起點導航：</strong>你目前離路線起點超過 ${ROUTE_START_ACCESS_DISTANCE} 公尺，已加入前往路線起點的導引線段。</div>
+    `;
+  }
+
   dom.showRouteBtn.disabled = false;
 }
 
@@ -91,7 +102,8 @@ export async function showRoute() {
   try {
     dom.routeInfo.innerHTML = "正在向 API 載入路線";
 
-    const routeData = await fetchWalkingRoute(route.points);
+    const routingPoints = getRoutingPointsWithOptionalAccess(route);
+    const routeData = await fetchWalkingRoute(routingPoints);
     const decodedRoute = decodePolyline(routeData.geometry);
 
     clearPreviewLine();
@@ -104,6 +116,62 @@ export async function showRoute() {
     console.error(error);
     dom.routeInfo.textContent = `載入路線失敗：${error.message}`;
   }
+}
+
+function getRoutingPointsWithOptionalAccess(route) {
+  const userLatLng = getCurrentUserLatLng();
+  const routeStart = route.points[0];
+  const points = [...route.points];
+
+  points.hasAccessSegment = false;
+
+  if (!userLatLng || !routeStart) {
+    return points;
+  }
+
+  const distanceToStart = getDistanceMeters(
+    userLatLng,
+    [routeStart.lat, routeStart.lng]
+  );
+
+  if (distanceToStart <= ROUTE_START_ACCESS_DISTANCE) {
+    return points;
+  }
+
+  const userStartPoint = {
+    name: "你目前的位置",
+    lat: userLatLng[0],
+    lng: userLatLng[1]
+  };
+
+  const pointsWithAccess = [userStartPoint, ...route.points];
+  pointsWithAccess.hasAccessSegment = true;
+
+  return pointsWithAccess;
+}
+
+function getDistanceMeters(pointA, pointB) {
+  const earthRadiusMeters = 6371000;
+
+  const lat1 = toRadians(pointA[0]);
+  const lat2 = toRadians(pointB[0]);
+  const deltaLat = toRadians(pointB[0] - pointA[0]);
+  const deltaLng = toRadians(pointB[1] - pointA[1]);
+
+  const a =
+    Math.sin(deltaLat / 2) * Math.sin(deltaLat / 2) +
+    Math.cos(lat1) *
+      Math.cos(lat2) *
+      Math.sin(deltaLng / 2) *
+      Math.sin(deltaLng / 2);
+
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+
+  return earthRadiusMeters * c;
+}
+
+function toRadians(degrees) {
+  return degrees * (Math.PI / 180);
 }
 
 async function fetchWalkingRoute(points) {
