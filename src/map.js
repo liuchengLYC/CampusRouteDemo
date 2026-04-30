@@ -132,15 +132,30 @@ export function hasLoadedRoute() {
 export function initCampusPoints(campusPoints, campusLegend) {
   campusLegend.innerHTML = "";
 
+  const campusInfoIcon = L.divIcon({
+    className: "",
+    html: `
+      <div class="campus-info-marker">
+      </div>
+    `,
+    iconSize: [170, 40],
+    iconAnchor: [16, 32],
+    popupAnchor: [0, -28]
+  });
+
   campusPoints.forEach((point) => {
-    L.circleMarker([point.lat, point.lng], {
-      radius: 8,
-      color: "blue",
-      fillColor: "blue",
-      fillOpacity: 0.8
+    const description = point.description || "這裡可以放我們對這個地點的介紹。";
+
+    L.marker([point.lat, point.lng], {
+      icon: campusInfoIcon
     })
       .addTo(campusMap)
-      .bindPopup(point.name);
+      .bindPopup(`
+        <div>
+          <div class="campus-popup-title">${point.name}</div>
+          <p class="campus-popup-text">${description}</p>
+        </div>
+      `);
 
     const li = document.createElement("li");
     li.innerHTML = `<span class="legend-dot"></span>${point.name}`;
