@@ -15,21 +15,6 @@ export const ROUTES = {
       { name: "管院一號館", lat: 25.01389, lng: 121.53785 }
     ]
   },
-  route_2: {
-    name: "台大正門 → 電機系館 → 社科圖",
-    points: [
-      { name: "台大正門", lat: 25.016935262663143, lng: 121.53393017463715 },
-      { name: "電機系館", lat: 25.01862, lng: 121.54229 },
-      { name: "社科圖", lat: 25.02049, lng: 121.54244 }
-    ]
-  },
-  route_3: {
-    name: "總圖 → 博理館",
-    points: [
-      { name: "總圖", lat: 25.0178, lng: 121.54106 },
-      { name: "博理館", lat: 25.01936, lng: 121.54231 }
-    ]
-  },
   route_4: {
     name: "繞台大一圈",
     useManualPath: true,
