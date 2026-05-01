@@ -41,6 +41,18 @@
 .panel-page.active {
   display: block;
 }
+
+.tab-group {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+
+.tab-button {
+  min-height: 44px;
+  padding: 12px 14px;
+  font-size: 16px;
+}
   
   h1 {
     margin-top: 0;
