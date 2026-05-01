@@ -91,11 +91,14 @@ function renderLoadedManualRouteInfo(route, routingPoints) {
   const dom = getDom();
   const hasAccessSegment = routingPoints.hasAccessSegment;
   const routePoints = hasAccessSegment ? routingPoints.slice(1) : routingPoints;
+  const modeText = hasAccessSegment
+    ? "手動路線，顯示路線時會使用 OSRM 導航至起點"
+    : "手動路線，不使用 OSRM 自動導航";
 
   dom.routeInfo.innerHTML = `
     <strong>已載入路線：</strong>${route.name}
     <br>
-    <strong>模式：</strong>手動路線，不使用 OSRM 自動導航
+    <strong>模式：</strong>${modeText}
     <br>
     <strong>路線節點：</strong>
     <ol class="route-point-list">
@@ -123,14 +126,13 @@ export async function showRoute() {
   clearRouteLine();
   resetNavigation();
 
-  if (route.useManualPath) {
-    showManualRoute(route);
-    return;
-  }
-
   try {
-    dom.routeInfo.innerHTML = "正在向 API 載入路線";
+    if (route.useManualPath) {
+      await showManualRoute(route);
+      return;
+    }
 
+    dom.routeInfo.innerHTML = "正在向 API 載入路線";
     const routingPoints = getRoutingPointsWithOptionalAccess(route);
     const routeData = await fetchWalkingRoute(routingPoints);
     const decodedRoute = decodePolyline(routeData.geometry);
@@ -147,28 +149,40 @@ export async function showRoute() {
   }
 }
 
-function showManualRoute(route) {
+async function showManualRoute(route) {
+  const dom = getDom();
   const routingPoints = getRoutingPointsWithOptionalAccess(route);
   const routeLatLngs = route.points.map((point) => [point.lat, point.lng]);
-  const fullLatLngs = routingPoints.map((point) => [point.lat, point.lng]);
-
-  clearPreviewLine();
-  drawActualRoute(routeLatLngs);
+  let accessRouteData = null;
+  let fullLatLngs = routeLatLngs;
 
   if (routingPoints.hasAccessSegment) {
-    drawRoutePreview(routingPoints.slice(0, 2));
+    dom.routeInfo.innerHTML = "正在向 OSRM 載入前往路線起點的導航";
+    accessRouteData = await fetchWalkingRoute(routingPoints.slice(0, 2));
+    const accessLatLngs = decodePolyline(accessRouteData.geometry);
+    fullLatLngs = [...accessLatLngs, ...routeLatLngs.slice(1)];
   }
 
-  const manualRouteData = buildManualRouteData(routingPoints);
-  const navigationSteps = setNavigationSteps(manualRouteData.legs);
+  clearPreviewLine();
+  drawActualRoute(fullLatLngs);
+
+  const manualRouteData = buildManualRouteData(route.points);
+  const navigationLegs = accessRouteData
+    ? [...accessRouteData.legs, ...manualRouteData.legs]
+    : manualRouteData.legs;
+  const navigationSteps = setNavigationSteps(navigationLegs);
 
   updateNavigationView();
-  renderManualRouteSummary(route, routingPoints, navigationSteps.length);
+  renderManualRouteSummary(
+    route,
+    route.points,
+    navigationSteps.length,
+    accessRouteData
+  );
 
   if (routingPoints.hasAccessSegment) {
-    const dom = getDom();
     dom.routeInfo.innerHTML += `
-      <div><strong>起點導航：</strong>你目前離路線起點超過 ${ROUTE_START_ACCESS_DISTANCE} 公尺，已用預覽線段標示目前位置到路線起點。</div>
+      <div><strong>起點導航：</strong>你目前離路線起點超過 ${ROUTE_START_ACCESS_DISTANCE} 公尺，已使用 OSRM 產生前往路線起點的導航。</div>
     `;
   }
 }
@@ -230,18 +244,28 @@ function buildManualRouteData(points) {
   };
 }
 
-function renderManualRouteSummary(route, points, stepCount) {
+function renderManualRouteSummary(
+  route,
+  points,
+  stepCount,
+  accessRouteData = null
+) {
   const dom = getDom();
-  const totalMeters = points.slice(0, -1).reduce((sum, point, index) => {
+  const manualMeters = points.slice(0, -1).reduce((sum, point, index) => {
     return sum + getDistanceMeters(
       [point.lat, point.lng],
       [points[index + 1].lat, points[index + 1].lng]
     );
   }, 0);
+  const accessMeters = accessRouteData?.distance || 0;
+  const totalMeters = manualMeters + accessMeters;
+  const modeText = accessRouteData
+    ? "手動路線，起點前導路段使用 OSRM 自動導航"
+    : "手動路線，不使用 OSRM 自動導航";
 
   dom.routeInfo.innerHTML = `
     <strong>路線名稱：</strong>${route.name}<br>
-    <strong>模式：</strong>手動路線，不使用 OSRM 自動導航<br>
+    <strong>模式：</strong>${modeText}<br>
     <strong>總距離：</strong>${(totalMeters / 1000).toFixed(2)} 公里<br>
     <strong>總步驟數：</strong>${stepCount} 步
   `;
