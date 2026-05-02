@@ -129,7 +129,7 @@ export function hasLoadedRoute() {
   return isRouteLoaded;
 }
 
-export function initCampusPoints(campusPoints, campusLegend) {
+export function initCampusPoints(campusPoints, dangerPoints, campusLegend) {
   campusLegend.innerHTML = "";
 
   const campusInfoIcon = L.divIcon({
@@ -142,6 +142,22 @@ export function initCampusPoints(campusPoints, campusLegend) {
     iconAnchor: [16, 32],
     popupAnchor: [0, -28]
   });
+
+  const dangerIcon = L.divIcon({
+    className: "",
+    html: `
+      <div class="danger-marker">
+      </div>
+    `,
+    iconSize: [32, 32],
+    iconAnchor: [16, 16],
+    popupAnchor: [0, -18]
+  });
+
+  const restHeader = document.createElement("li");
+  restHeader.className = "legend-heading";
+  restHeader.textContent = "休息點";
+  campusLegend.appendChild(restHeader);
 
   campusPoints.forEach((point) => {
     const description = point.description || "這裡可以放我們對這個地點的介紹。";
@@ -158,7 +174,29 @@ export function initCampusPoints(campusPoints, campusLegend) {
       `);
 
     const li = document.createElement("li");
-    li.innerHTML = `<span class="legend-dot"></span>${point.name}`;
+    li.innerHTML = `<span class="legend-dot rest-dot"></span>${point.name}`;
+    campusLegend.appendChild(li);
+  });
+
+  const dangerHeader = document.createElement("li");
+  dangerHeader.className = "legend-heading";
+  dangerHeader.textContent = "危險點";
+  campusLegend.appendChild(dangerHeader);
+
+  dangerPoints.forEach((point) => {
+    L.marker([point.lat, point.lng], {
+      icon: dangerIcon
+    })
+      .addTo(campusMap)
+      .bindPopup(`
+        <div>
+          <div class="campus-popup-title">${point.name}</div>
+          <p class="campus-popup-text">危險點</p>
+        </div>
+      `);
+
+    const li = document.createElement("li");
+    li.innerHTML = `<span class="legend-dot danger-dot"></span>${point.name}`;
     campusLegend.appendChild(li);
   });
 }

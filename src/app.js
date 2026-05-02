@@ -4,7 +4,7 @@
 // Wire all modules together after the DOM is ready. Feature logic stays in the
 // individual modules; this file only controls startup order and event binding.
 
-import { CAMPUS_POINTS } from "./data.js";
+import { CAMPUS_POINTS, DANGER_POINTS } from "./data.js";
 import { initMaps, initCampusPoints } from "./map.js";
 import { trackUserLocation } from "./location.js";
 import { goNextStep, goPrevStep } from "./navigation.js";
@@ -27,7 +27,7 @@ function startApp() {
     initRouteSelect();
 
     const maps = initMaps();
-    initCampusPoints(CAMPUS_POINTS, dom.campusLegend);
+    initCampusPoints(CAMPUS_POINTS, DANGER_POINTS, dom.campusLegend);
     initTabs(maps);
 
     switchTab("route", maps);
